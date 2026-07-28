@@ -1,0 +1,38 @@
+[project]
+name = "callwrap-api"
+version = "0.1.0"
+description = "CallWrap API 서버 — 업로드·품질 게이트(②)·파이프라인 오케스트레이션·결과 저장(④⑥)"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "python-multipart>=0.0.12",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.5",
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.2",
+    "alembic>=1.14",
+    "celery[redis]>=5.4",
+    "pyyaml>=6.0",
+    "callwrap-ai",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "httpx>=0.27",
+]
+
+# ai/를 로컬 경로로 물린다. api/는 callwrap_ai.analyze()와 schemas만 쓴다.
+[tool.uv.sources]
+callwrap-ai = { path = "../ai", editable = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/callwrap_api"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

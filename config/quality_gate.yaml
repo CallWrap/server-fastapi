@@ -1,0 +1,67 @@
+# 품질 게이트(②) 임계값.
+#
+# ★ 규리와 공유하는 파일. 체크 함수 4개가 전부 여기서 임계값을 읽는다.
+#    코드에 숫자를 박지 않는다 — Week 7 튜닝 때 이 파일만 고치면 되도록.
+#
+# ⚠️ 아래 숫자는 전부 **가정치**다. 실제 콜 데이터로 검증된 값이 하나도 없다.
+#    Week 7 임계값 튜닝에서 골든셋 기준으로 다시 정한다.
+#
+# version은 GateResult.details.checked_at_version에 그대로 기록된다.
+# 임계값을 바꿨으면 version도 반드시 올린다. 안 그러면 어떤 기준으로 판정된
+# 결과인지 DB에서 구분할 수 없다.
+
+version: "v0.1.0-draft"
+
+# 재시도 상한. 초과하면 retry 대신 human_review로 넘어간다. (팀 합의)
+max_retry: 2
+
+checks:
+  # ── 규리 담당 ──────────────────────────────────────
+  check_stt_confidence:
+    enabled: true
+    # 신뢰도가 낮은 발화의 "비율" 상한. 0.15 = 15%까지 봐준다.
+    threshold: 0.15
+    higher_is_better: false
+    action_on_fail: retry
+    params:
+      # Utterance.confidence가 이 값 미만이면 "신뢰도 낮음"으로 센다.
+      # ⚠️ Whisper의 avg_logprob는 대략 -1.0~0 범위라 0~1로 정규화가 필요하다.
+      #    정규화를 stt/에서 할지 여기서 할지는 미정 — docs/backend_conventions.md 참고.
+      low_confidence_below: 0.6
+      # confidence가 None인 발화를 어떻게 셀지. skip = 모집단에서 제외.
+      on_missing_confidence: skip
+
+  check_repetition_and_gaps:
+    enabled: true
+    # 반복·과소 텍스트로 의심되는 발화 비율 상한.
+    threshold: 0.10
+    higher_is_better: false
+    action_on_fail: retry
+    params:
+      ngram_size: 5
+      # 같은 n-gram이 이 횟수 이상 연속되면 hallucination 의심.
+      max_ngram_repeats: 3
+      # 발화 길이 대비 글자 수가 이보다 적으면 과소 텍스트 의심.
+      min_chars_per_second: 1.0
+
+  # ── 정민 담당 ──────────────────────────────────────
+  check_speaker_overlap:
+    enabled: true
+    # 서로 다른 화자의 발화가 시간상 겹친 구간이 전체 발화 시간에서 차지하는 비율 상한.
+    # 상담 통화는 맞장구·말 끊기가 정상적으로 존재하므로 0은 비현실적이다.
+    threshold: 0.10
+    higher_is_better: false
+    # 겹침이 심하면 화자분리가 실패한 것 — 재처리해도 같은 결과가 나온다.
+    action_on_fail: human_review
+    params: {}
+
+  check_segment_length:
+    enabled: true
+    # 극단적으로 짧거나 긴 발화의 비율 상한.
+    threshold: 0.10
+    higher_is_better: false
+    # 세그멘테이션이 무너진 것 — 원본이나 분할 파라미터 문제라 재처리로 안 낫는다.
+    action_on_fail: human_review
+    params:
+      min_seconds: 0.5
+      max_seconds: 60.0

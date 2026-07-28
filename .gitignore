@@ -1,0 +1,11 @@
+# 로컬 전용 데이터 — 업로드된 음성 파일이 여기 쌓인다 (명세 4.2)
+data/
+
+# Python
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+
+# macOS
+.DS_Store
