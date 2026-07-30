@@ -1,0 +1,18 @@
+[project]
+# 실제 AI 모델(AI-model 레포)이 배포될 때 대체되는 예시(stub) 패키지.
+# 패키지명·버전·공개 심볼을 실제와 동일하게 맞춰, api/의 import를 하나도 바꾸지 않고
+# 나중에 [tool.uv.sources]의 경로만 실제 레포로 교체하면 되도록 한다.
+name = "callwrap-ai"
+version = "0.2.0"
+description = "예시(stub) AI 분석 모델 — 실제 모델(AI-model 레포) 완성 전 계약 검증·연동용"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.7",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/callwrap_ai"]

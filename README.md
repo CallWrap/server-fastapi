@@ -1,12 +1,9 @@
 # CallWrap — server-fastapi
 
-상담 후처리 자동화 파이프라인의 **FastAPI 백엔드**. 음성 업로드부터 STT, 데이터 품질 게이트,
+상담 후처리 자동화 파이프라인의 **백엔드 서버**. 음성 업로드부터 STT, 데이터 품질 게이트,
 AI 분석 결과 저장까지를 담당한다. FastAPI(동기 API) + Celery(비동기 워커) 구성.
 
-전체 시스템은 두 개의 백엔드로 나뉜다.
-
-- **server-fastapi** — 음성 처리·AI 추론·파이프라인 오케스트레이션
-- **server-spring** (담당: 김규리) — 사용자·인증·검토(review) 도메인 API
+전체 파이프라인 중 ② 데이터 품질 게이트, ④ AI 분석 결과 저장, ⑥ 상담사 확정 데이터 축적을 맡는다.
 
 ## 아키텍처
 
@@ -23,21 +20,6 @@ AI 분석 결과 저장까지를 담당한다. FastAPI(동기 API) + Celery(비�
 - **상태 관리** — `state.py`의 FSM이 콜 상태 전이의 유일한 진실. 허용되지 않은 전이는 예외.
 - **AI 분석** — `callwrap_ai.analyze()` 하나만 호출한다(분석 로직은 별도 `ai` 패키지 소유).
 
-## API
-### 계획된 기능 엔드포인트 (노션 명세, 미구현)
-
-파이프라인 내부 단계를 개별 API로도 노출할 예정. 명세는 노션 "백엔드 자료 (API 명세, ERD)" 참고.
-
-| 기능 | 경로 | 메서드 | 상태 |
-|---|---|---|---|
-| STT 전사 | `/stt` | POST | 서버 개발 전 |
-| 화자 분리 | `/diarize` | POST | 서버 개발 전 |
-| 상담 요약 | `/summarize` | POST | 서버 개발 전 |
-| 상담등급 분류 | `/classify/grade` | POST | 서버 개발 전 |
-| 상담유형 분류 | `/classify/type` | POST | 서버 개발 전 |
-| 상담분류 분류 | `/classify/category` | POST | 서버 개발 전 |
-| 후속처리 판정 | `/followup` | POST | 서버 개발 전 |
-| 품질 게이트 | `/quality-gate` | POST | 서버 개발 전 (정민·규리) |
 
 ## 콜 상태(FSM)
 
@@ -46,6 +28,36 @@ UPLOADED → TRANSCRIBING → QUALITY_CHECK ┬─ PASSED → ANALYZING → DONE
                                         ├─ RETRYING → (재시도)
                                         └─ NEEDS_HUMAN_REVIEW
 (모든 단계에서 실패 시 → FAILED)
+```
+
+## 실행
+
+> **의존성 참고:** `callwrap-ai`를 로컬 경로(`../ai`)로 물린다(`pyproject.toml`의 `[tool.uv.sources]`).
+> 이 레포를 단독으로 클론하면 `../ai`가 없어 `uv sync`가 실패한다. `ai` 패키지를 형제 디렉터리에
+> 두거나, 소스 지정을 배포용(레지스트리/깃)으로 바꿔야 한다.
+
+```bash
+uv sync                                  # 의존성 설치
+docker compose up -d postgres redis      # DB·큐만 로컬로
+uv run alembic upgrade head              # 스키마 생성
+
+uv run uvicorn callwrap_api.main:app --reload                              # API 서버
+uv run celery -A callwrap_api.tasks.app.celery_app worker --loglevel=info  # 워커
+```
+
+전체를 컨테이너로: `docker compose up -d`. API 문서(Swagger): http://localhost:8000/docs
+
+### 테스트
+
+```bash
+uv run pytest                            # DB 없이 도는 테스트만 (DB 붙는 건 자동 skip)
+
+# 파이프라인 흐름 테스트까지 (DB 필요)
+createdb callwrap_test
+CALLWRAP_TEST_DATABASE_URL="postgresql+psycopg://$(whoami)@localhost:5432/callwrap_test" \
+  DATABASE_URL="postgresql+psycopg://$(whoami)@localhost:5432/callwrap_test" \
+  uv run alembic upgrade head
+CALLWRAP_TEST_DATABASE_URL=... DATABASE_URL=... uv run pytest
 ```
 
 ## 구조
