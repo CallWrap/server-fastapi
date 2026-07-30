@@ -1,4 +1,4 @@
-"""예시(stub) AI 모델 경로 end-to-end 검증 (P1, 구현사항 ②).
+"""예시(stub) AI 모델 경로 end-to-end 검증
 
 기존 test_pipeline_flow.py는 품질 체크를 '가짜'로 갈아끼워 분기 로직만 본다.
 여기서는 **가짜를 쓰지 않는다** — STT stub이 만든 전사를 실제 품질 게이트
