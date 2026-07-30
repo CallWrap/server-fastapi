@@ -1,18 +1,16 @@
 [project]
 name = "callwrap-api"
 version = "0.1.0"
-description = "CallWrap API 서버 — 업로드·품질 게이트(②)·파이프라인 오케스트레이션·결과 저장(④⑥)"
+description = "CallWrap 무상태 워커 — 품질 게이트(②)·파이프라인·AI 분석 호출. Spring↔RabbitMQ 연동, DB는 Spring 소유"
 requires-python = ">=3.11"
 dependencies = [
+    # FastAPI/uvicorn은 헬스체크 전용 앱에만 쓴다(업무 API는 Spring 소유).
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
-    "python-multipart>=0.0.12",
     "pydantic>=2.7",
     "pydantic-settings>=2.5",
-    "sqlalchemy>=2.0",
-    "psycopg[binary]>=3.2",
-    "alembic>=1.14",
-    "celery[redis]>=5.4",
+    # RabbitMQ broker + kombu 발행. (redis extra 제거 — 무상태라 result backend 없음)
+    "celery>=5.4",
     "pyyaml>=6.0",
     "callwrap-ai",
 ]

@@ -19,12 +19,14 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    database_url: str = "postgresql+psycopg://callwrap:callwrap@localhost:5432/callwrap"
-    redis_url: str = "redis://localhost:6379/0"
+    # Celery broker 겸 Spring↔FastAPI 메시징 브로커. result backend는 쓰지 않는다
+    # (결과는 RabbitMQ로 Spring에 발행하고, DB·상태 저장은 Spring이 소유한다).
+    # 무상태 워커라 DATABASE_URL은 없다 — FastAPI는 DB를 건드리지 않는다.
+    rabbitmq_url: str = "amqp://guest:guest@localhost:5672//"
 
-    # 업로드된 음성 파일 저장 위치. 로컬 전용 — .gitignore 처리됨.
-    # 실서비스에서는 오브젝트 스토리지로 교체될 지점이다.
-    audio_storage_dir: Path = API_ROOT / "data" / "audio"
+    # ★ 오디오 취득 지점. local = audio_uri를 로컬/공유볼륨 경로로 본다(messaging/audio.py).
+    #    오브젝트 스토리지(S3/MinIO)가 정해지면 백엔드를 추가한다.
+    audio_source: str = "local"
 
     # 품질 게이트 임계값 파일 (규리와 공유하는 설정)
     quality_gate_config_path: Path = API_ROOT / "config" / "quality_gate.yaml"

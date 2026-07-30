@@ -1,16 +1,16 @@
-"""파이프라인 ① — STT + 화자분리 태스크. 담당: 김규리, 이정민 (세부 분담 미정).
-
-실제 전사는 stt/가 맡는다. 이 태스크는 stt/를 부르고 결과를 ②로 넘기기만 한다.
+"""
+실제 전사는 stt/가 맡는다. 이 태스크는 오디오를 받아와 stt/를 부르고 결과를 ②로 넘긴다.
 ★ Whisper → 이노하이 교체 지점이 _transcribe() 아래로 숨는다.
+
+무상태 워커: DB를 건드리지 않는다. 상태(call_id·audio_uri·retry_count)는 전부 인자로
+흐른다. audio_uri를 계속 들고 다니는 이유 — 게이트가 retry를 걸면 여기로 다시 와서
+같은 오디오를 재전사해야 하기 때문.
 """
 
 import logging
-import uuid
 
-from callwrap_api.db import repository
-from callwrap_api.db.session import SessionLocal
+from callwrap_api.messaging.audio import fetch_audio
 from callwrap_api.settings import get_settings
-from callwrap_api.state import CallStatus
 from callwrap_api.stt_stub import transcribe_stub
 from callwrap_api.tasks.app import celery_app
 from callwrap_api.tasks.base import PipelineTask
@@ -39,27 +39,18 @@ def _transcribe(audio_path: str) -> Transcript:
 
 
 @celery_app.task(base=PipelineTask, bind=True, name="callwrap.transcribe")
-def transcribe_task(self, call_id: str) -> str:
-    """음성 파일을 전사하고 품질 게이트 큐에 넣는다.
+def transcribe_task(self, call_id: str, audio_uri: str, retry_count: int = 0) -> str:
+    """오디오를 받아와 전사하고 품질 게이트 큐에 넣는다.
 
-    재시도로 다시 들어올 수도 있다 (RETRYING → TRANSCRIBING). 그때도 같은 경로다.
+    재시도로 다시 들어올 수도 있다(게이트가 retry_count를 올려 되보낸다). 같은 경로다.
+    실패하면 PipelineTask.on_failure가 Spring에 FAILED를 발행한다.
     """
-    # 순환 임포트를 피해 함수 안에서 임포트한다 (quality_gate가 이 모듈을 되부른다).
+    # 순환 임포트를 피해 함수 안에서 임포트한다.
     from callwrap_api.tasks.quality_gate import run_quality_gate_task
 
-    with SessionLocal() as db:
-        call = repository.get_call(db, uuid.UUID(call_id))
-        if call is None:
-            raise ValueError(f"콜을 찾을 수 없다: {call_id}")
-
-        if call.call_status is CallStatus.TRANSCRIBING:
-            # 이미 전사 중 — 중복 배달이다. 다시 돌리면 큐에 두 번 들어간다.
-            logger.warning("콜 %s는 이미 TRANSCRIBING이다. 중복 실행으로 보고 건너뛴다.", call_id)
-            return "skipped"
-
-        repository.set_status(db, call, CallStatus.TRANSCRIBING)
-        audio_path = call.audio_path
-
+    audio_path = fetch_audio(audio_uri)
     transcript = _transcribe(audio_path)
-    run_quality_gate_task.delay(call_id, transcript.model_dump_json())
-    return f"utterances={len(transcript.utterances)}"
+    run_quality_gate_task.delay(
+        call_id, transcript.model_dump_json(), audio_uri, retry_count
+    )
+    return f"utterances={len(transcript.utterances)} retry={retry_count}"
