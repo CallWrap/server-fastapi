@@ -1,4 +1,4 @@
-"""입출력 계약 — 4명 공용. 변경 시 전원 리뷰. (명세 4.3, 4.4)
+"""입출력 계약 — 4명 공용
 
 - `Transcript`: stt/ → (품질 게이트 ②) → ai/ 로 들어오는 유일한 입력
 - `AnalysisResult`: ai/ → api/ → web/ 으로 나가는 유일한 출력
@@ -43,9 +43,9 @@ class Transcript(BaseModel):
 
 
 class ConsultationType(str, Enum):
-    """상담유형(SR유형) 8종 — 기관 참고자료(2026-07-21 수령)로 확정.
+    """상담유형(SR유형) 8종 — 기관 참고자료로 확정.
 
-    유형 혼재 콜은 적기처리기간이 긴 항목을 우선 부여한다 (docs/label_spec.md).
+    유형 혼재 콜은 적기처리기간이 긴 항목을 우선 부여한다.
     """
 
     USAGE = "사용법문의"
@@ -59,7 +59,7 @@ class ConsultationType(str, Enum):
 
 
 class ConsultationCategory(str, Enum):
-    """상담(업무)중분류 6종 — 기관 참고자료(2026-07-21) 기준.
+    """상담(업무)중분류 6종 — 기관 참고자료 기준.
 
     대분류는 바우처 사업명이며 본 과제 스코프는 '장애인활동지원'으로 고정이라
     필드로 두지 않는다. 참고자료 원문의 '결제및비용지금'은 명백한 오기이므로
@@ -75,7 +75,7 @@ class ConsultationCategory(str, Enum):
 
 
 class ConsultationSubcategory(str, Enum):
-    """상담(업무)소분류 29종 — 기관 참고자료(2026-07-21) 기준.
+    """상담(업무)소분류 29종 — 기관 참고자료 기준.
 
     소속 중분류는 SUBCATEGORIES_BY_CATEGORY 참고. 성능 목표 지표는 중분류
     기준이며 소분류는 보조 출력이다 (docs/label_spec.md).
@@ -189,12 +189,12 @@ T = TypeVar("T")
 class Judgment(BaseModel, Generic[T]):
     """값 + 신뢰도 + 근거 묶음. web/의 3-tier UI가 confidence로 렌더링을 가른다.
 
-    3-tier 임계값(90/60)은 가정치이므로 스키마에 넣지 않고 설정으로 뺀다. (명세 4.5)
+    3-tier 임계값(90/60)은 가정치이므로 스키마에 넣지 않고 설정으로 뺀다.
     """
 
     value: T
     confidence: float = Field(
-        ge=0, le=1, description="캘리브레이션된 확률. LLM self-report 값 사용 금지 (명세 9.3)"
+        ge=0, le=1, description="캘리브레이션된 확률. LLM self-report 값 사용 금지"
     )
     evidence_indices: list[int] = Field(
         default_factory=list, description="근거 발화의 Utterance.index. web/이 하이라이트"
@@ -223,7 +223,7 @@ class AnalysisResult(BaseModel):
     grade: Judgment[ConsultationGrade] | None
     needs_followup: Judgment[bool] | None
     needs_faq: Judgment[bool] | None = Field(
-        description="반복 문의로 판단되어 FAQ 신규 생성이 필요한지 (7/14 회의 확정 스코프)"
+        description="반복 문의로 판단되어 FAQ 신규 생성이 필요한지"
     )
     failures: list[str] = Field(
         default_factory=list, description='부분 실패한 모듈명. 예: ["summarize"]'
