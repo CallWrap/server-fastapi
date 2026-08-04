@@ -1,14 +1,17 @@
-"""FastAPI 앱. 실행: uv run uvicorn callwrap_api.main:app --reload"""
+"""FastAPI 앱 — liveness/헬스체크 전용. 실행: uv run uvicorn callwrap_api.main:app --reload
+
+무상태 워커라 업무 API(업로드·조회)는 없다 — 그건 Spring이 소유한다. 이 앱은 컨테이너
+liveness와 STT 백엔드 노출용 /health 하나만 제공한다. 실제 일은 Celery worker와
+messaging/consumer가 한다.
+"""
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI
 
 from callwrap_api.quality.config import load_quality_gate_config
-from callwrap_api.routers import calls, health
+from callwrap_api.routers import health
 from callwrap_api.settings import get_settings
-from callwrap_api.state import InvalidTransition
 
 
 @asynccontextmanager
@@ -22,16 +25,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="CallWrap API",
-    description="상담이 끝나면, 기록은 AI가 — 상담 후처리 자동화 백엔드",
+    description="상담이 끝나면, 기록은 AI가 — 상담 후처리 자동화 워커(헬스체크 전용 API)",
     version="0.1.0",
     lifespan=lifespan,
 )
 
 app.include_router(health.router)
-app.include_router(calls.router)
-
-
-@app.exception_handler(InvalidTransition)
-async def invalid_transition_handler(request: Request, exc: InvalidTransition) -> JSONResponse:
-    """상태 전이 위반은 클라이언트 잘못이 아니라 우리 파이프라인의 버그다. 409로 드러낸다."""
-    return JSONResponse(status_code=409, content={"detail": str(exc)})

@@ -1,16 +1,5 @@
 """품질 게이트(②) 결과 계약.
 
-★ 규리와 공유하는 파일. 4개 체크 함수가 모두 이 타입 하나를 반환한다.
-   변경하려면 규리와 합의 후에. 필드를 늘리기 전에 details로 되는지 먼저 검토할 것.
-
-합의 사항 (2026-07-17):
-- 점수 방향을 이름으로 추측하지 않는다 → higher_is_better를 결과에 명시한다 (A안).
-- 체크 함수는 정상 로직만 담당한다. 예외는 orchestrator가 통합 처리한다 (B안).
-- 임계값은 코드가 아니라 config/quality_gate.yaml에서 온다.
-
-이 파일만 dataclass인 이유: 팀 합의 시점의 형태를 그대로 유지했다.
-(ai/schemas.py는 pydantic이지만 그쪽은 JSON 직렬화 계약이라 목적이 다르다.
- GateResult는 프로세스 안에서만 오가고, DB 저장은 models.py가 따로 맡는다.)
 """
 
 from dataclasses import asdict, dataclass
@@ -49,11 +38,7 @@ class GateResult:
     details: Optional[dict] = None  # 필수 키는 REQUIRED_DETAIL_KEYS 참고
 
     def to_dict(self) -> dict[str, Any]:
-        """로깅·직렬화용. details까지 깊은 복사라 반환값을 고쳐도 원본은 안 변한다.
-
-        DB 저장에는 쓰지 않는다 — repository가 컬럼에 명시적으로 매핑한다.
-        필드가 늘었을 때 여기로 조용히 새어나가는 걸 막으려는 것.
-        """
+        """로깅·직렬화용. details까지 깊은 복사라 반환값을 고쳐도 원본은 안 변한다."""
         return asdict(self)
 
 
