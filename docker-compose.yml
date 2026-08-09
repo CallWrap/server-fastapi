@@ -1,22 +1,9 @@
 # 개발용 스택. 실행: docker compose up -d
 #
-# 무상태 워커 — DB(Postgres)는 Spring이 소유하므로 여기 없다.
-# 세 프로세스: rabbitmq(브로커) · worker(Celery 파이프라인) · consumer(Spring Job 브리지).
-# api는 헬스체크 전용. 소스를 볼륨으로 물려 코드 수정이 바로 반영된다.
-# 실서비스 배포용이 아니다 — Week 7에 별도로 정리한다.
+# RabbitMQ는 이 레포에서 안 띄운다 — Spring의 docker-compose.yml에서 뜬 것을 공유해서 쓴다.
+# 로컬 개발 시 Spring 쪽을 먼저 `docker compose up -d`로 띄워둬야 이 스택이 정상 동작한다.
 
 services:
-  rabbitmq:
-    image: rabbitmq:3-management
-    ports:
-      - "5672:5672"    # AMQP
-      - "15672:15672"  # 관리 UI (guest/guest)
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
   api:
     build:
       context: .
@@ -31,13 +18,12 @@ services:
     ports:
       - "8001:8000"
     environment:
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672//
+      RABBITMQ_URL: amqp://guest:guest@host.docker.internal:5672//
     volumes:
       - ./src:/app/src
       - ./config:/app/config
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   worker:
     build:
@@ -45,31 +31,27 @@ services:
       dockerfile: Dockerfile
     command: uv run celery -A callwrap_api.tasks.app.celery_app worker --loglevel=info
     environment:
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672//
-    volumes:
-      - ./src:/app/src
-      - ./config:/app/config
-      # Spring이 올린(공유 볼륨) 오디오를 워커가 읽는다.
-      - audio_data:/app/data
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
+      RABBITMQ_URL: amqp://guest:guest@host.docker.internal:5672//
+      AUDIO_SOURCE: s3
+      S3_ENDPOINT_URL: http://host.docker.internal:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
-  # Spring Job 컨슈머(브리지). Spring의 JSON Job을 받아 Celery 파이프라인으로 넘긴다.
   consumer:
     build:
       context: .
       dockerfile: Dockerfile
     command: uv run python -m callwrap_api.messaging.consumer
     environment:
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672//
+      RABBITMQ_URL: amqp://guest:guest@host.docker.internal:5672//
     volumes:
       - ./src:/app/src
       - ./config:/app/config
       - audio_data:/app/data
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 volumes:
   audio_data:
