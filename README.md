@@ -13,10 +13,11 @@ Spring과의 메시지 계약은 **[docs/message_contract.md](docs/message_contr
 
 ## 실행
 
-> ⚠️ RabbitMQ는 이 레포에서 안 띄웁니다. `server-spring`의 docker-compose가 먼저 떠 있어야 함.
+> RabbitMQ는 이 레포에서 안 띄웁니다. `server-spring`의 docker-compose가 먼저 떠 있어야 함.
 > 추가 사항 : RABBITMQ_URL은 host.docker.internal:5672로 바꿔뒀습니다.!
 
-\`\`\`bash
+\`\`\`
+
 # 1. server-spring 레포에서 먼저
 docker compose up -d
 
