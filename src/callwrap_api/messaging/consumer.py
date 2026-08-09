@@ -38,14 +38,18 @@ class JobConsumer(ConsumerMixin):
     def __init__(self, connection: Connection):
         self.connection = connection
         exchange = Exchange(topo.EXCHANGE, type="topic", durable=True)
+        dlx = Exchange(topo.DLX_EXCHANGE, type="fanout", durable=True)
+        self.dlq = Queue(topo.QUEUE_JOBS_DLQ, exchange=dlx, durable=True)
         self.queue = Queue(
             topo.QUEUE_JOBS,
             exchange=exchange,
             routing_key=topo.ROUTING_JOB_REQUEST,
             durable=True,
+            queue_arguments={"x-dead-letter-exchange": topo.DLX_EXCHANGE},
         )
 
     def get_consumers(self, Consumer, channel):
+        self.dlq(channel).declare()
         return [Consumer(queues=[self.queue], callbacks=[self.on_message], accept=["json"])]
 
     def on_message(self, body, message):
