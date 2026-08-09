@@ -14,6 +14,7 @@ from callwrap_api.settings import get_settings
 from callwrap_api.stt_stub import transcribe_stub
 from callwrap_api.tasks.app import celery_app
 from callwrap_api.tasks.base import PipelineTask
+from callwrap_api.messaging.audio import TransientAudioError, fetch_audio
 
 from callwrap_ai.schemas import Transcript
 
@@ -38,7 +39,16 @@ def _transcribe(audio_path: str) -> Transcript:
     )
 
 
-@celery_app.task(base=PipelineTask, bind=True, name="callwrap.transcribe")
+@celery_app.task(
+    base=PipelineTask,
+    bind=True,
+    name="callwrap.transcribe",
+    autoretry_for=(TransientAudioError,),
+    retry_backoff=2,       # 2초, 4초, 8초 ...
+    retry_backoff_max=30,
+    retry_jitter=True,
+    max_retries=3,
+)
 def transcribe_task(self, call_id: str, audio_uri: str, retry_count: int = 0) -> str:
     """오디오를 받아와 전사하고 품질 게이트 큐에 넣는다.
 
