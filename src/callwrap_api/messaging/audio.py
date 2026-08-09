@@ -41,15 +41,12 @@ def _resolve_local(audio_uri: str) -> str:
         f"'local' 백엔드는 {parsed.scheme!r} 스킴을 다루지 못한다: {audio_uri!r}"
     )
 
+class TransientAudioError(Exception):
+    """네트워크 순단 등 — 다시 시도하면 성공할 수도 있는 오류."""
+    
 def _resolve_s3(audio_uri: str) -> str:
-
-    """s3://bucket/key를 MinIO/S3에서 내려받아 로컬 임시 경로로 반환한다.
-
-    진짜 AWS S3로 옮길 때도 이 함수는 그대로 — endpoint_url만 빠지면 된다.
-    다운로드한 임시파일은 여기서 지우지 않는다. 파이프라인 태스크가 다 쓴 뒤 정리하는
-       로직이 아직 없어서, 워커가 오래 떠 있으면 /tmp가 쌓인다 — todo..
-    """
     import boto3
+    from botocore.exceptions import ClientError, EndpointConnectionError
 
     parsed = urlparse(audio_uri)
     if parsed.scheme != "s3":
@@ -75,7 +72,12 @@ def _resolve_s3(audio_uri: str) -> str:
 
     try:
         client.download_file(bucket, key, str(tmp_path))
-    except Exception as exc:  # noqa: BLE001 — boto3 예외 계층이 커서 넓게 잡고 우리 예외로 감쌈
-        raise AudioNotFound(f"오디오 파일을 못 찾음: {audio_uri}") from exc
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code", "")
+        if code in ("404", "NoSuchKey", "NoSuchBucket"):
+            raise AudioNotFound(f"오디오 파일을 못 찾음: {audio_uri}") from exc
+        raise TransientAudioError(f"S3 접근 실패(재시도 가능): {audio_uri}") from exc
+    except EndpointConnectionError as exc:
+        raise TransientAudioError(f"S3 엔드포인트 연결 실패: {audio_uri}") from exc
 
     return str(tmp_path)
