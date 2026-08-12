@@ -1,3 +1,9 @@
+import os
+
+# 테스트는 개발자 .env에 의존하지 않는다 — STT_BACKEND=whisper인 .env를 둔 개발자도
+# base 테스트가 stub 경로로 돌게 강제한다. (env가 .env보다 우선하고, get_settings 캐시 전에 세팅)
+os.environ["STT_BACKEND"] = "stub"
+
 import pytest
 from fastapi.testclient import TestClient
 

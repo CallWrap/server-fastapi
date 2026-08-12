@@ -19,6 +19,17 @@ dev = [
     "pytest>=8",
     "httpx>=0.27",
 ]
+# 실 STT 백엔드(stt_backend="whisper")용 무거운 ML 의존성. 기본 워커엔 안 깔린다.
+# 설치: uv sync --group stt   (pyannote 게이트 모델은 HF_TOKEN 필요)
+stt = [
+    "faster-whisper>=1.0",
+    "pyannote.audio>=3.1,<4",   # 4.x는 기본 파이프라인을 게이트 community-1로 바꿈 — 3.x 유지(segmentation-3.0)
+    "torch>=2.1,<2.3",          # pyannote 3.x는 옛 torchaudio API(AudioMetaData) 기대 — 버전 고정
+    "torchaudio>=2.1,<2.3",
+    "numpy<2",                  # torch 2.2는 numpy 1.x 빌드 — numpy 2.x면 torch.from_numpy 깨짐
+    "huggingface_hub<0.28",     # 0.28에서 use_auth_token 제거 — pyannote 3.x가 아직 그 인자를 씀
+    "soundfile>=0.12",   # 오디오 로드 (ffmpeg 없이 libsndfile로 wav/aiff/flac)
+]
 
 # callwrap-ai는 예시(stub) 패키지를 로컬 경로로 물린다. api/는 analyze()와 schemas만 쓴다.
 # 실제 모델(AI-model 레포) 완성 시 이 한 줄만 git 소스로 교체한다. 예:

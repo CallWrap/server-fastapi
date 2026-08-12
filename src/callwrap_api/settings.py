@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     quality_gate_config_path: Path = API_ROOT / "config" / "quality_gate.yaml"
     stt_backend: str = "stub"
 
+    # stt_backend="whisper"일 때만 쓰인다.
+    whisper_model: str = "base"          # faster-whisper 모델 크기 (tiny/base/small/medium/large-v3)
+    hf_token: str | None = None          # pyannote 게이트 모델 다운로드용 (HuggingFace 토큰)
+
 
 @lru_cache
 def get_settings() -> Settings:
