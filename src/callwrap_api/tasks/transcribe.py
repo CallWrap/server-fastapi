@@ -9,12 +9,11 @@
 
 import logging
 
-from callwrap_api.messaging.audio import fetch_audio
+from callwrap_api.messaging.audio import TransientAudioError, fetch_audio
 from callwrap_api.settings import get_settings
 from callwrap_api.stt_stub import transcribe_stub
 from callwrap_api.tasks.app import celery_app
 from callwrap_api.tasks.base import PipelineTask
-from callwrap_api.messaging.audio import TransientAudioError, fetch_audio
 
 from callwrap_ai.schemas import Transcript
 
@@ -34,8 +33,12 @@ def _transcribe(audio_path: str) -> Transcript:
     backend = get_settings().stt_backend
     if backend == "stub":
         return transcribe_stub(audio_path)
+    if backend == "whisper":
+        from callwrap_api.stt_whisper import transcribe_whisper
+
+        return transcribe_whisper(audio_path)
     raise UnknownSTTBackend(
-        f"모르는 STT 백엔드: {backend!r}. 현재 지원: 'stub' (stt/ 연동 대기)"
+        f"모르는 STT 백엔드: {backend!r}. 현재 지원: 'stub', 'whisper'"
     )
 
 
