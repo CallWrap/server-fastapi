@@ -35,7 +35,7 @@ stt = [
 # 실제 모델(AI-model 레포) 완성 시 이 한 줄만 git 소스로 교체한다. 예:
 #   callwrap-ai = { git = "https://github.com/CallWrap/AI-model.git" }
 [tool.uv.sources]
-callwrap-ai = { path = "stubs/callwrap-ai", editable = true }
+callwrap-ai = { git = "https://github.com/CallWrap/AI-model.git" }
 
 [build-system]
 requires = ["hatchling"]
