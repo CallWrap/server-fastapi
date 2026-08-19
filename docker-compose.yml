@@ -8,6 +8,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      secrets:
+        - github_token
     command: >
       uv run uvicorn callwrap_api.main:app
       --host 0.0.0.0
@@ -29,6 +31,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      secrets:
+        - github_token
     command: uv run celery -A callwrap_api.tasks.app.celery_app worker --loglevel=info
     environment:
       RABBITMQ_URL: amqp://guest:guest@host.docker.internal:5672//
@@ -49,6 +53,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      secrets:
+        - github_token
     command: uv run python -m callwrap_api.messaging.consumer
     environment:
       RABBITMQ_URL: amqp://guest:guest@host.docker.internal:5672//
@@ -61,3 +67,9 @@ services:
 
 volumes:
   audio_data:
+
+secrets:
+  # AI-model(비공개 레포)을 git으로 받아오기 위한 GitHub PAT.
+  # server-fastapi/.github_token 파일(gitignore 처리됨)에 토큰 한 줄만 넣어두면 된다.
+  github_token:
+    file: ./.github_token

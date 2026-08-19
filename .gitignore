@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 
+# AI-model(비공개 레포) 클론용 GitHub PAT — 도커 빌드 시크릿으로만 쓰고 커밋 금지
+.github_token
+
 # 로컬 전용 데이터 — 업로드된 음성 파일이 여기 쌓인다 (명세 4.2)
 data/
 
