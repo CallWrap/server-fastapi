@@ -19,3 +19,6 @@ __pycache__/
 .env
 .env.*
 !.env.example
+
+# 오프라인 반입 번들 (가중치·wheel 포함, 커밋 금지)
+bundle/
