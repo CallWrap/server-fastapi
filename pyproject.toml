@@ -12,11 +12,14 @@ dependencies = [
     "pyyaml>=6.0",
     "boto3>=1.34",
     "callwrap-ai",
+    "httpx>=0.27",  # FAQ 배치 생성기(routers/faq.py)가 Spring 내부 API를 호출할 때 씀
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8",
+    # httpx는 이제 메인 의존성(위 dependencies)에 있어서 여기 안 둬도 되지만,
+    # 테스트에서 TestClient가 httpx를 요구해 명시적으로 남겨둔다.
     "httpx>=0.27",
 ]
 # 실 STT 백엔드(stt_backend="whisper")용 무거운 ML 의존성. 기본 워커엔 안 깔린다.

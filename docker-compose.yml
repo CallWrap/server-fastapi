@@ -21,6 +21,11 @@ services:
       - "8001:8000"
     environment:
       RABBITMQ_URL: amqp://guest:guest@host.docker.internal:5672//
+      # FAQ 배치 생성기(routers/faq.py)가 Spring 내부 API(/api/internal/faq/*)를 호출할 때 씀.
+      SPRING_API_BASE_URL: ${SPRING_API_BASE_URL:-http://host.docker.internal:8080}
+      # 요약/후속처리/FAQ와 마찬가지로 EXAONE(Ollama) 호출이 필요 — 소분류당 최소 후보 건수도 같이 둔다.
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      FAQ_MIN_GROUP_SIZE: ${FAQ_MIN_GROUP_SIZE:-3}
     volumes:
       - ./src:/app/src
       - ./config:/app/config

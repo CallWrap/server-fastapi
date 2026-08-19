@@ -3,6 +3,9 @@
 무상태 워커라 업무 API(업로드·조회)는 없다 — 그건 Spring이 소유한다. 이 앱은 컨테이너
 liveness와 STT 백엔드 노출용 /health 하나만 제공한다. 실제 일은 Celery worker와
 messaging/consumer가 한다.
+
+예외: routers/faq.py의 FAQ 배치 생성 트리거. Spring이 여전히 유일한 저장소라 무상태성
+원칙 자체는 안 깨진다 — 자세한 이유는 그 파일 독스트링 참고.
 """
 
 from contextlib import asynccontextmanager
@@ -10,7 +13,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from callwrap_api.quality.config import load_quality_gate_config
-from callwrap_api.routers import health
+from callwrap_api.routers import faq, health
 from callwrap_api.settings import get_settings
 
 
@@ -31,3 +34,4 @@ app = FastAPI(
 )
 
 app.include_router(health.router)
+app.include_router(faq.router)
