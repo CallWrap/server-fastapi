@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     stt_backend: str = "stub"
 
     # stt_backend="whisper"일 때만 쓰인다.
-    whisper_model: str = "base"          # faster-whisper 모델 크기 (tiny/base/small/medium/large-v3)
+    whisper_model: str = "large-v3"      # faster-whisper 모델 크기 (tiny/base/small/medium/large-v3) — 정확도 우선
     hf_token: str | None = None          # pyannote 게이트 모델 다운로드용 (HuggingFace 토큰)
 
 
