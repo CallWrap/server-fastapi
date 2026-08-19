@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from callwrap_ai.schemas import AnalysisResult
+from callwrap_ai.schemas import AnalysisResult, Transcript
 
 #: 계약 버전. 필드 추가는 minor, 의미 변경/삭제는 major로 올린다.
 SCHEMA_VERSION = "1.0"
@@ -53,7 +53,8 @@ class QualitySummary(BaseModel):
 class ResultMessage(BaseModel):
     """FastAPI가 발행하는 분석 결과.
 
-    - status=DONE: analysis 채워짐(부분 실패는 analysis.failures로).
+    - status=DONE: analysis 채워짐(부분 실패는 analysis.failures로). transcript도 함께 실린다 —
+      상담사 화면의 전사 패널은 이 필드가 없으면 원본 발화를 보여줄 방법이 없다.
     - status=NEEDS_HUMAN_REVIEW: analysis=None, quality.failed_checks로 사유 전달.
     - status=FAILED: error에 원인, analysis=None.
     """
@@ -62,18 +63,21 @@ class ResultMessage(BaseModel):
     call_id: uuid.UUID
     status: ResultStatus
     analysis: dict[str, Any] | None = None
+    #: DONE일 때만 채워진다. Transcript.model_dump(mode="json") 그대로.
+    transcript: dict[str, Any] | None = None
     quality: QualitySummary | None = None
     failures: list[str] = Field(default_factory=list)
     error: str | None = None
     completed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-def build_done(call_id: uuid.UUID, analysis: AnalysisResult) -> ResultMessage:
-    """분석 성공(DONE). analysis 전체를 그대로 싣는다(부분 실패 포함)."""
+def build_done(call_id: uuid.UUID, analysis: AnalysisResult, transcript: Transcript) -> ResultMessage:
+    """분석 성공(DONE). analysis와 전사 원본을 함께 싣는다(부분 실패는 analysis.failures로)."""
     return ResultMessage(
         call_id=call_id,
         status=ResultStatus.DONE,
         analysis=analysis.model_dump(mode="json"),
+        transcript=transcript.model_dump(mode="json"),
         failures=analysis.failures,
     )
 
