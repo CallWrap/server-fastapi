@@ -46,6 +46,9 @@ services:
       STT_BACKEND: ${STT_BACKEND:-whisper}
       WHISPER_MODEL: ${WHISPER_MODEL:-base}
       HF_TOKEN: ${HF_TOKEN}
+      # 요약/후속처리/FAQ(EXAONE) 호출용. 컨테이너 안에서 127.0.0.1은 컨테이너 자신을
+      # 가리키므로, 호스트(또는 다른 곳)에서 도는 Ollama에 닿으려면 host.docker.internal이 필요하다.
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
