@@ -83,10 +83,13 @@ PY
 "$ROOT/.venv/bin/python" -m pip wheel -q --no-deps -w "$OUT/wheels" "$ROOT"
 
 echo "[4/6] STT 모델 가중치 (whisper·pyannote)"
-# HuggingFace 허브 캐시 — faster-whisper만 여기를 쓴다.
+# HuggingFace 허브 캐시 — faster-whisper만 여기를 쓴다. .env의 WHISPER_MODEL과 일치해야 한다.
+WHISPER_SIZE="$(grep -oE '^WHISPER_MODEL=.*' "$ROOT/.env" 2>/dev/null | cut -d= -f2)"
+WHISPER_SIZE="${WHISPER_SIZE:-large-v3}"
 HF="${HF_HOME:-$HOME/.cache/huggingface}/hub"
-for m in models--Systran--faster-whisper-base; do
+for m in "models--Systran--faster-whisper-$WHISPER_SIZE"; do
   [ -d "$HF/$m" ] && cp -R "$HF/$m" "$OUT/hf-cache/" && echo "     + (hf-cache) $m"
+  [ -d "$HF/$m" ] || echo "     ! 경고: $m 이(가) 캐시에 없다. WHISPER_MODEL=$WHISPER_SIZE 로 한 번 전사를 돌려 캐시를 채운 뒤 재실행하라."
 done
 # pyannote는 Pipeline.from_pretrained()의 cache_dir 기본값이 PYANNOTE_CACHE(기본
 # ~/.cache/torch/pyannote)라 파이프라인 설정(config.yaml)·segmentation·화자임베딩 전부
