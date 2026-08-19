@@ -8,6 +8,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      secrets:
+        - github_token
     command: >
       uv run uvicorn callwrap_api.main:app
       --host 0.0.0.0
@@ -29,6 +31,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      secrets:
+        - github_token
     command: uv run celery -A callwrap_api.tasks.app.celery_app worker --loglevel=info
     environment:
       RABBITMQ_URL: amqp://guest:guest@host.docker.internal:5672//
@@ -36,6 +40,12 @@ services:
       S3_ENDPOINT_URL: http://host.docker.internal:9000
       S3_ACCESS_KEY: minioadmin
       S3_SECRET_KEY: minioadmin
+      # 실제 STT 돌리는 서비스라 여기만 필요. 값은 이 파일과 같은 폴더의 .env에서 읽어온다
+      # (docker compose가 자동으로 읽는 .env — 없으면 STT_BACKEND/WHISPER_MODEL은 기본값으로,
+      #  HF_TOKEN은 빈 값으로 들어가 pyannote 게이트 모델 다운로드가 실패한다).
+      STT_BACKEND: ${STT_BACKEND:-whisper}
+      WHISPER_MODEL: ${WHISPER_MODEL:-base}
+      HF_TOKEN: ${HF_TOKEN}
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -43,6 +53,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      secrets:
+        - github_token
     command: uv run python -m callwrap_api.messaging.consumer
     environment:
       RABBITMQ_URL: amqp://guest:guest@host.docker.internal:5672//
@@ -55,3 +67,9 @@ services:
 
 volumes:
   audio_data:
+
+secrets:
+  # AI-model(비공개 레포)을 git으로 받아오기 위한 GitHub PAT.
+  # server-fastapi/.github_token 파일(gitignore 처리됨)에 토큰 한 줄만 넣어두면 된다.
+  github_token:
+    file: ./.github_token
