@@ -308,7 +308,7 @@ wheels = [
 [[package]]
 name = "callwrap-ai"
 version = "0.2.0"
-source = { git = "https://github.com/CallWrap/AI-model.git#6007552fddef723ef393c8e5ce6aab18f3e0c3f9" }
+source = { git = "https://github.com/CallWrap/AI-model.git#e03e05b5271b5f8a5c700c8f79c1aa58052d8922" }
 dependencies = [
     { name = "pydantic" },
 ]

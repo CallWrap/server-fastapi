@@ -26,3 +26,6 @@ jfk.wav
 
 # 오프라인 반입 번들 (가중치·wheel 포함, 커밋 금지)
 bundle/
+
+# F2 분류 모델 체크포인트 로컬 캐시 (CALLWRAP_MODEL_DIR_HOST 기본값, docker-compose.yml worker 볼륨)
+.model-cache/

@@ -54,6 +54,17 @@ services:
       # 요약/후속처리/FAQ(EXAONE) 호출용. 컨테이너 안에서 127.0.0.1은 컨테이너 자신을
       # 가리키므로, 호스트(또는 다른 곳)에서 도는 Ollama에 닿으려면 host.docker.internal이 필요하다.
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      # F2(중분류·소분류) 분류 모델 체크포인트 경로. classify.py의 기본값(DEFAULT_MODEL_DIR)은
+      # callwrap-ai가 git 의존성으로 설치된 venv 내부 경로라 컨테이너 안에 실제로 존재하지 않는다
+      # (docker compose exec worker uv run python3 -c "from callwrap_ai import classify;
+      #  print(classify.model_dir(), classify.model_dir().exists())" → False로 확인됨).
+      # 그래서 아래 볼륨 마운트가 채워주는 /app/models로 오버라이드한다. 체크포인트는 AI-model이
+      # 성진 말대로 "로컬에서 재현 학습"하는 구조라 이 레포는 실행 결과물이 없다 — CALLWRAP_MODEL_DIR_HOST를
+      # .env에서 실제 체크포인트가 있는 경로로 지정해야 이 마운트가 의미가 생긴다. 비워두면 빈 폴더가
+      # 마운트되고 classify.py가 지금처럼 None을 돌려 부분 실패(classify_category 등)로 넘어간다.
+      CALLWRAP_MODEL_DIR: /app/models
+    volumes:
+      - ${CALLWRAP_MODEL_DIR_HOST:-./.model-cache}:/app/models
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
