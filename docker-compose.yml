@@ -36,6 +36,12 @@ services:
       S3_ENDPOINT_URL: http://host.docker.internal:9000
       S3_ACCESS_KEY: minioadmin
       S3_SECRET_KEY: minioadmin
+      # 실제 STT 돌리는 서비스라 여기만 필요. 값은 이 파일과 같은 폴더의 .env에서 읽어온다
+      # (docker compose가 자동으로 읽는 .env — 없으면 STT_BACKEND/WHISPER_MODEL은 기본값으로,
+      #  HF_TOKEN은 빈 값으로 들어가 pyannote 게이트 모델 다운로드가 실패한다).
+      STT_BACKEND: ${STT_BACKEND:-whisper}
+      WHISPER_MODEL: ${WHISPER_MODEL:-base}
+      HF_TOKEN: ${HF_TOKEN}
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
