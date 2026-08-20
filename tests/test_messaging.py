@@ -20,27 +20,27 @@ from callwrap_api.messaging.contracts import (
 )
 
 
-def _example_analysis():
-    from callwrap_ai import analyze
+def _transcript():
     from callwrap_ai.schemas import Speaker, Transcript, Utterance
 
-    t = Transcript(
+    return Transcript(
         utterances=[
             Utterance(index=0, speaker=Speaker.CUSTOMER, text="x", start=0, end=1, confidence=0.9)
         ]
     )
-    return analyze(t)
 
 
 # ── 계약 ────────────────────────────────────────────────
 
 
-def test_build_done_carries_analysis():
+def test_build_done_carries_analysis_and_transcript(fixed_analysis):
     cid = uuid.uuid4()
-    msg = build_done(cid, _example_analysis())
+    msg = build_done(cid, fixed_analysis, _transcript())
     assert msg.status is ResultStatus.DONE
     assert msg.call_id == cid
-    assert msg.analysis["consultation_type"]["value"] == "사용법문의"
+    assert msg.analysis["consultation_type"]["value"] == fixed_analysis.consultation_type.value.value
+    # 전사도 같이 실린다 — 상담사 화면의 전사 패널은 이 필드가 없으면 원문을 못 그린다.
+    assert msg.transcript["utterances"][0]["speaker"] == "고객"
     assert msg.failures == []
 
 
@@ -94,7 +94,9 @@ def eager_celery():
     celery_app.conf.task_always_eager = False
 
 
-def test_dispatch_runs_full_pipeline_and_publishes_done(eager_celery, captured_results, tmp_path):
+def test_dispatch_runs_full_pipeline_and_publishes_done(
+    eager_celery, captured_results, fixed_analysis, tmp_path
+):
     """Spring Job(JSON) → dispatch → transcribe→gate→analyze → DONE 발행."""
     from callwrap_api.messaging import consumer
 
@@ -107,4 +109,4 @@ def test_dispatch_runs_full_pipeline_and_publishes_done(eager_celery, captured_r
     done = [m for m in captured_results if m.status is ResultStatus.DONE]
     assert len(done) == 1
     assert done[0].call_id == cid
-    assert done[0].analysis["grade"]["value"] == "일반"
+    assert done[0].analysis["grade"]["value"] == fixed_analysis.grade.value.value

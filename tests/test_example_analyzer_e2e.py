@@ -1,13 +1,15 @@
-"""예시(stub) AI 모델 경로 end-to-end 검증 (무상태).
+"""게이트 통과 → DONE 발행 end-to-end 검증 (무상태).
 
 가짜 체크를 쓰지 않는다 — STT stub이 만든 전사를 실제 품질 게이트(실제 checks +
-config/quality_gate.yaml)에 통과시키고, 예시 analyzer(analyze())의 결과가 Spring으로
-발행되는 DONE 메시지에 그대로 실리는지 확인한다.
+config/quality_gate.yaml)에 통과시키고, analyze()의 결과가 Spring으로 발행되는 DONE
+메시지에 그대로 실리는지 확인한다.
 
-실제 모델(AI-model)로 교체돼도 이 테스트의 '경로'는 동일하다 — 바뀌는 건 analyze()가
-내는 값뿐이라, 값에 대한 단언은 예시 모델 기준으로 둔다(교체 시 이 파일만 갱신).
+**analyze() 자체는 fixed_analysis로 고정한다.** 예전엔 stubs/callwrap-ai가 고정값을
+내줘서 그 값을 그대로 단언했는데, 실제 AI-model을 git 소스로 물면서 그 단언이 깨졌다
+(consultation_type은 SR 모델 미연동이라 "기타" 고정, 분류는 체크포인트가 있어야 값이 난다).
+여기서 검증할 것은 값이 아니라 경로다 — 판정값 검증은 AI-model 쪽 테스트가 한다.
 
-DB도 브로커도 없다. 발행은 captured_results가 가로챈다.
+DB도 브로커도 모델도 없다. 발행은 captured_results가 가로챈다.
 """
 
 import uuid
@@ -25,8 +27,10 @@ def eager_celery():
     celery_app.conf.task_always_eager = False
 
 
-def test_stub_transcript_passes_real_gate_and_publishes_example_done(captured_results, tmp_path):
-    """실제 게이트 통과 → 예시 analyzer 결과가 DONE 메시지로 발행되는지."""
+def test_stub_transcript_passes_real_gate_and_publishes_done(
+    captured_results, fixed_analysis, tmp_path
+):
+    """실제 게이트 통과 → analyze() 결과가 DONE 메시지로 발행되는지."""
     from callwrap_api.messaging.contracts import ResultStatus
     from callwrap_api.tasks.transcribe import transcribe_task
 
@@ -42,14 +46,18 @@ def test_stub_transcript_passes_real_gate_and_publishes_example_done(captured_re
     assert msg.call_id == cid
 
     a = msg.analysis
-    assert a["consultation_type"]["value"] == "사용법문의"
-    assert a["consultation_type"]["confidence"] == 0.95
-    assert a["grade"]["value"] == "일반"
+    # AnalysisResult가 계약 형태 그대로(Judgment = value+confidence+evidence_indices) 실렸는지
+    assert a["consultation_type"]["value"] == fixed_analysis.consultation_type.value.value
+    assert a["consultation_type"]["confidence"] == fixed_analysis.consultation_type.confidence
+    assert a["grade"]["value"] == fixed_analysis.grade.value.value
     assert a["summary"]["value"]["title"]  # 요약 제목 비어있지 않음
     assert a["failures"] == []
     assert msg.failures == []
 
+    # 전사 원본도 함께 실린다 (web 전사 패널용)
+    assert msg.transcript is not None and msg.transcript["utterances"]
+
     # evidence_indices가 실존 발화 index만 가리키는지 (stub 전사는 index 0~3)
-    valid = {0, 1, 2, 3}
+    valid = {u["index"] for u in msg.transcript["utterances"]}
     for field in ("summary", "consultation_type", "needs_followup"):
         assert set(a[field]["evidence_indices"]) <= valid
