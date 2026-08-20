@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -38,6 +39,8 @@ class Settings(BaseSettings):
     # stt_backend="whisper"일 때만 쓰인다.
     whisper_model: str = "large-v3"      # faster-whisper 모델 크기 (tiny/base/small/medium/large-v3) — 정확도 우선
     hf_token: str | None = None          # pyannote 게이트 모델 다운로드용 (HuggingFace 토큰)
+    # callwrap-ai와 STT가 함께 쓰는 추론 장치. 명시값만 허용해 CUDA DLL 문제를 CPU로 조용히 숨기지 않는다.
+    callwrap_device: Literal["cpu", "cuda"] = "cpu"
 
     # FAQ 배치 생성기(routers/faq.py)가 Spring 내부 API(/api/internal/faq/*)를 호출할 때 쓴다.
     # 컨테이너 안에서 localhost는 컨테이너 자신을 가리키므로 host.docker.internal이 기본값.
