@@ -32,8 +32,13 @@ dev = [
 stt = [
     "faster-whisper>=1.0",
     "pyannote.audio>=3.1,<4",   # 4.x는 기본 파이프라인을 게이트 community-1로 바꿈 — 3.x 유지(segmentation-3.0)
+    "speechbrain==1.0.3",       # 1.1.0의 Windows 지연 import가 미사용 k2/flair/numba를 강제 로드
     "torch>=2.1,<2.3",          # pyannote 3.x는 옛 torchaudio API(AudioMetaData) 기대 — 버전 고정
     "torchaudio>=2.1,<2.3",
+    # CTranslate2 Windows wheel은 CUDA 드라이버만으로는 부족하고 cuBLAS·cuDNN DLL이 필요하다.
+    # 12.6으로 고정해 이 PC(드라이버 CUDA 12.6)와 분석실 오프라인 wheelhouse를 동일하게 만든다.
+    "nvidia-cublas-cu12==12.6.4.1; sys_platform == 'win32'",
+    "nvidia-cudnn-cu12==9.6.0.74; sys_platform == 'win32'",
     "numpy<2",                  # torch 2.2는 numpy 1.x 빌드 — numpy 2.x면 torch.from_numpy 깨짐
     "huggingface_hub<0.28",     # 0.28에서 use_auth_token 제거 — pyannote 3.x가 아직 그 인자를 씀
     "soundfile>=0.12",   # 오디오 로드 (ffmpeg 없이 libsndfile로 wav/aiff/flac)
@@ -45,6 +50,13 @@ stt = [
 # (stubs/callwrap-ai는 이 전환 이전에 쓰던 예시 패키지라 지금은 아무도 참조하지 않는다.)
 [tool.uv.sources]
 callwrap-ai = { git = "https://github.com/CallWrap/AI-model.git" }
+torch = { index = "pytorch-cu121", marker = "sys_platform == 'win32'" }
+torchaudio = { index = "pytorch-cu121", marker = "sys_platform == 'win32'" }
+
+[[tool.uv.index]]
+name = "pytorch-cu121"
+url = "https://download.pytorch.org/whl/cu121"
+explicit = true
 
 [build-system]
 requires = ["hatchling"]

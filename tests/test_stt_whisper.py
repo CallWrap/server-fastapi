@@ -2,6 +2,7 @@
 
 from callwrap_api.stt_whisper import (
     _assign_speakers,
+    _compute_type,
     _confidence,
     _role_map,
     _speaker_at,
@@ -9,6 +10,11 @@ from callwrap_api.stt_whisper import (
 )
 
 from callwrap_ai.schemas import Speaker
+
+
+def test_compute_type_matches_device():
+    assert _compute_type("cuda") == "float16"
+    assert _compute_type("cpu") == "int8"
 
 
 def test_role_map_first_speaker_is_counselor():

@@ -18,33 +18,82 @@ Whisper가 자기 편의대로 자른 덩어리라 화자가 바뀌는 지점을
 한 번만 로드한다(lru_cache).
 """
 
+import importlib.util
 import math
+import os
 from functools import lru_cache
+from pathlib import Path
 
 from callwrap_api.settings import get_settings
 
 from callwrap_ai.schemas import Speaker, Transcript, Utterance
 
 
+# os.add_dll_directory 핸들이 GC되면 검색 경로가 다시 제거되므로 프로세스 수명 동안 보관한다.
+_WINDOWS_DLL_HANDLES: list[object] = []
+
+
+def _compute_type(device: str) -> str:
+    """CTranslate2 장치별 안정적인 연산 형식."""
+    return "float16" if device == "cuda" else "int8"
+
+
+@lru_cache(maxsize=1)
+def _configure_windows_cuda_dlls() -> None:
+    """NVIDIA Windows wheels의 DLL 디렉터리를 현재 프로세스 검색 경로에 등록한다."""
+    if os.name != "nt" or get_settings().callwrap_device != "cuda":
+        return
+
+    missing: list[str] = []
+    for package in ("nvidia.cublas", "nvidia.cudnn"):
+        spec = importlib.util.find_spec(package)
+        locations = list(spec.submodule_search_locations or ()) if spec else []
+        dll_dir = Path(locations[0]) / "bin" if locations else None
+        if dll_dir is None or not dll_dir.is_dir():
+            missing.append(package)
+            continue
+
+        # PATH는 CTranslate2의 동적 LoadLibrary 검색에, add_dll_directory는 Python 확장 DLL 검색에 쓴다.
+        os.environ["PATH"] = f"{dll_dir}{os.pathsep}{os.environ.get('PATH', '')}"
+        _WINDOWS_DLL_HANDLES.append(os.add_dll_directory(str(dll_dir)))
+
+    if missing:
+        raise RuntimeError(
+            "CALLWRAP_DEVICE=cuda requires Windows CUDA runtime wheels: " + ", ".join(missing)
+        )
+
+
 @lru_cache(maxsize=1)
 def _whisper():
     from faster_whisper import WhisperModel
 
-    return WhisperModel(get_settings().whisper_model)
+    settings = get_settings()
+    _configure_windows_cuda_dlls()
+    return WhisperModel(
+        settings.whisper_model,
+        device=settings.callwrap_device,
+        compute_type=_compute_type(settings.callwrap_device),
+    )
 
 
 @lru_cache(maxsize=1)
 def _diarizer():
-    import os
-
     from pyannote.audio import Pipeline
+    import torch
 
     # 인자로 토큰을 넘기지 않는다 — pyannote/hf_hub 버전마다 인자명이 use_auth_token↔token으로
     # 달라 깨진다. HF_TOKEN을 env에 두면 huggingface_hub이 알아서 읽는다(버전 무관).
     token = get_settings().hf_token
     if token:
         os.environ.setdefault("HF_TOKEN", token)
-    return Pipeline.from_pretrained("pyannote/speaker-diarization-3.1")
+    pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1")
+    if get_settings().callwrap_device == "cuda":
+        if not torch.cuda.is_available():
+            raise RuntimeError(
+                "CALLWRAP_DEVICE=cuda but CUDA-enabled PyTorch is not available for pyannote"
+            )
+        pipeline.to(torch.device("cuda"))
+    return pipeline
 
 
 def transcribe_whisper(audio_path: str) -> Transcript:

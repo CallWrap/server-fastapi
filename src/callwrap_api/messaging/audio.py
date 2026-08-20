@@ -4,8 +4,9 @@
 """
 
 import tempfile
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 from callwrap_api.settings import get_settings
 
@@ -32,8 +33,9 @@ def fetch_audio(audio_uri: str) -> str:
 
 def _resolve_local(audio_uri: str) -> str:
     parsed = urlparse(audio_uri)
-    if parsed.scheme in ("", "file"):
-        path = Path(parsed.path if parsed.scheme == "file" else audio_uri)
+    is_windows_path = bool(PureWindowsPath(audio_uri).drive)
+    if parsed.scheme in ("", "file") or is_windows_path:
+        path = Path(url2pathname(parsed.path)) if parsed.scheme == "file" else Path(audio_uri)
         if not path.exists():
             raise AudioNotFound(f"오디오 파일이 없다: {path}")
         return str(path)
