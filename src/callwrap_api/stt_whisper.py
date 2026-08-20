@@ -1,5 +1,18 @@
 """Whisper STT + pyannote 화자분리 → Transcript. ★ STT 교체 지점(이노하이로 통째 교체될 자리).
 
+**발화는 단어 단위로 만든다.** Whisper 세그먼트를 그대로 발화로 쓰면 안 된다 — 세그먼트는
+Whisper가 자기 편의대로 자른 덩어리라 화자가 바뀌는 지점을 모른다. 실제 통화에서 이렇게 나왔다:
+
+    [1] 고객   "…아직 처리가 안 됐다고"      ← 문장이 중간에 잘리고
+    [2] 상담사 "나와서요. 네, 확인해드리겠습니다"  ← 고객 말꼬리가 상담사 발화에 붙었다
+
+`evidence_indices`가 가리키는 근거 발화가 엉뚱해지고, 요약도 화자를 헷갈릴 수 있다.
+그래서 `word_timestamps=True`로 단어별 시각을 받아, **화자가 바뀌는 단어에서 발화를 끊는다.**
+
+같은 이유로 confidence도 단어 확률의 평균을 쓴다. 세그먼트의 `avg_logprob`은 실은 30초
+디코딩 창 단위라(같은 창의 세그먼트가 전부 같은 값을 갖는다) 특정 발화 하나가 뭉개진 것을
+품질 게이트가 잡아낼 수 없었다.
+
 무거운 ML 의존성(faster-whisper·pyannote)은 함수 안에서 지연 임포트한다 — 기본 워커
 설치(stt 그룹 미설치)에서도 이 모듈 import와 병합 로직 테스트가 돈다. 모델은 프로세스당
 한 번만 로드한다(lru_cache).
@@ -36,11 +49,27 @@ def _diarizer():
 
 def transcribe_whisper(audio_path: str) -> Transcript:
     """오디오를 전사(Whisper)하고 화자를 배정(pyannote)해 Transcript로 돌려준다."""
-    segments, _info = _whisper().transcribe(audio_path)
-    whisper_segments = [(s.start, s.end, s.text, s.avg_logprob) for s in segments]
+    segments, _info = _whisper().transcribe(audio_path, word_timestamps=True)
+    spans = _to_spans(segments)
 
     turns = _diarize(audio_path)
-    return Transcript(utterances=_assign_speakers(whisper_segments, turns))
+    return Transcript(utterances=_assign_speakers(spans, turns))
+
+
+def _to_spans(segments) -> list[tuple[float, float, str, float | None]]:
+    """세그먼트 목록 -> 단어 단위 (start, end, text, probability) 목록.
+
+    단어 시각이 없는 세그먼트(모델이 못 내주는 경우)는 세그먼트 하나를 통째로 한 조각으로 둔다 —
+    그 조각만 예전처럼 화자 경계가 뭉툭해질 뿐, 나머지는 단어 단위로 정확히 갈린다.
+    """
+    spans: list[tuple[float, float, str, float | None]] = []
+    for segment in segments:
+        words = getattr(segment, "words", None)
+        if words:
+            spans += [(w.start, w.end, w.word, w.probability) for w in words]
+        else:
+            spans.append((segment.start, segment.end, segment.text, _confidence(segment.avg_logprob)))
+    return spans
 
 
 def _diarize(audio_path: str) -> list[tuple[float, float, str]]:
@@ -61,28 +90,62 @@ def _diarize(audio_path: str) -> list[tuple[float, float, str]]:
 # ── 순수 병합 로직 (모델 없이 테스트 가능) ─────────────────────────────
 
 
-def _assign_speakers(whisper_segments, turns) -> list[Utterance]:
-    """Whisper 세그먼트에 화자를 배정해 Utterance 리스트를 만든다.
+def _assign_speakers(spans, turns) -> list[Utterance]:
+    """단어 조각들을 화자별로 묶어 발화 목록을 만든다.
 
-    whisper_segments: (start, end, text, avg_logprob) 리스트
-    turns:            (start, end, label) 화자 구간 리스트 (pyannote 출력)
+    spans: (start, end, text, probability) 목록 — 단어 단위가 기본이다.
+    turns: (start, end, label) 화자 구간 목록 (pyannote 출력)
+
+    화자가 바뀌는 조각에서 발화를 끊는다. 화자 구간이 안 잡히는 조각(구간 사이 빈틈, 숨소리
+    구간 등)은 **직전 화자를 이어간다** — 거기서 끊으면 한 문장이 쓸데없이 조각난다.
     """
     roles = _role_map(turns)
-    out = []
-    for i, (start, end, text, avg_logprob) in enumerate(whisper_segments):
-        label = _dominant_speaker(start, end, turns)
-        out.append(
+    utterances: list[Utterance] = []
+    texts: list[str] = []
+    probabilities: list[float] = []
+    speaker: Speaker | None = None
+    start = end = 0.0
+
+    def flush() -> None:
+        text = "".join(texts).strip()
+        if not text or speaker is None:
+            return
+        scored = [p for p in probabilities if p is not None]
+        utterances.append(
             Utterance(
-                index=i,
-                # 겹치는 화자구간이 없으면 상담사로 둔다(대개 시작/끝의 짧은 세그먼트).
-                speaker=roles.get(label, Speaker.COUNSELOR),
-                text=text.strip(),
+                index=len(utterances),
+                speaker=speaker,
+                text=text,
                 start=start,
                 end=end,
-                confidence=_confidence(avg_logprob),
+                confidence=round(sum(scored) / len(scored), 4) if scored else None,
             )
         )
-    return out
+
+    for span_start, span_end, text, probability in spans:
+        label = _speaker_at((span_start + span_end) / 2, turns)
+        # 화자를 못 찾으면 직전 화자를 잇는다. 통화 맨 앞이라 직전도 없으면 상담사로 둔다
+        # (인바운드 콜은 상담사가 먼저 받는다 — _role_map과 같은 전제).
+        current = roles.get(label) or speaker or Speaker.COUNSELOR
+        if current is not speaker:
+            flush()
+            texts, probabilities = [], []
+            speaker, start = current, span_start
+        texts.append(text)
+        probabilities.append(probability)
+        end = span_end
+
+    flush()
+    return utterances
+
+
+def _speaker_at(when: float, turns) -> str | None:
+    """그 시각을 품는 화자 구간의 라벨. 겹치는 구간이 여럿이면 더 늦게 시작한 쪽(교대 직후)을 쓴다."""
+    best, best_start = None, float("-inf")
+    for t_start, t_end, label in turns:
+        if t_start <= when < t_end and t_start > best_start:
+            best, best_start = label, t_start
+    return best
 
 
 def _role_map(turns) -> dict[str, Speaker]:
@@ -99,16 +162,6 @@ def _role_map(turns) -> dict[str, Speaker]:
         label: (Speaker.COUNSELOR if i == 0 else Speaker.CUSTOMER)
         for i, label in enumerate(order)
     }
-
-
-def _dominant_speaker(start, end, turns) -> str | None:
-    """세그먼트와 시간상 가장 많이 겹치는 화자 라벨. 겹침 없으면 None."""
-    best, best_overlap = None, 0.0
-    for t_start, t_end, label in turns:
-        overlap = min(end, t_end) - max(start, t_start)
-        if overlap > best_overlap:
-            best, best_overlap = label, overlap
-    return best
 
 
 def _confidence(avg_logprob) -> float | None:
