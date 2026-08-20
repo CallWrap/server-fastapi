@@ -3,6 +3,9 @@ import os
 # 테스트는 개발자 .env에 의존하지 않는다 — STT_BACKEND=whisper인 .env를 둔 개발자도
 # base 테스트가 stub 경로로 돌게 강제한다. (env가 .env보다 우선하고, get_settings 캐시 전에 세팅)
 os.environ["STT_BACKEND"] = "stub"
+# 같은 이유로 오디오 취득도 local로 고정한다. .env에 AUDIO_SOURCE=s3를 둔 개발자 머신에서는
+# 파이프라인 테스트가 tmp_path의 로컬 wav를 S3 키로 해석해 MinIO에 붙으려다 실패한다.
+os.environ["AUDIO_SOURCE"] = "local"
 
 import pytest
 from fastapi.testclient import TestClient
