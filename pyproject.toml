@@ -11,7 +11,12 @@ dependencies = [
     "celery>=5.4",
     "pyyaml>=6.0",
     "boto3>=1.34",
-    "callwrap-ai",
+    # [train] extra를 반드시 붙인다. callwrap-ai 기본 의존성은 pydantic뿐이라 torch·transformers가
+    # 안 깔리고, 그러면 classify.py의 지연 import가 ImportError를 삼켜 None을 돌린다 — F2 중분류·
+    # 소분류가 **조용히** 항상 부분 실패(failures=["classify_category", ...])로 넘어간다.
+    # 체크포인트를 /app/models에 아무리 잘 마운트해도 소용없다. extra 이름이 "train"이라 학습 전용처럼
+    # 보이지만 실제 내용물은 torch+transformers+sklearn이고, 추론에도 앞의 둘이 그대로 필요하다.
+    "callwrap-ai[train]",
     "httpx>=0.27",  # FAQ 배치 생성기(routers/faq.py)가 Spring 내부 API를 호출할 때 씀
 ]
 
@@ -34,9 +39,10 @@ stt = [
     "soundfile>=0.12",   # 오디오 로드 (ffmpeg 없이 libsndfile로 wav/aiff/flac)
 ]
 
-# callwrap-ai는 예시(stub) 패키지를 로컬 경로로 물린다. api/는 analyze()와 schemas만 쓴다.
-# 실제 모델(AI-model 레포) 완성 시 이 한 줄만 git 소스로 교체한다. 예:
-#   callwrap-ai = { git = "https://github.com/CallWrap/AI-model.git" }
+# callwrap-ai는 실제 모델(AI-model 레포)을 git 소스로 문다. api/는 analyze()와 schemas만 쓴다.
+# uv.lock이 커밋 해시까지 고정하므로, AI-model에 변경이 머지되면 여기서도 다시 잠가야 반영된다:
+#   uv lock --upgrade-package callwrap-ai
+# (stubs/callwrap-ai는 이 전환 이전에 쓰던 예시 패키지라 지금은 아무도 참조하지 않는다.)
 [tool.uv.sources]
 callwrap-ai = { git = "https://github.com/CallWrap/AI-model.git" }
 
