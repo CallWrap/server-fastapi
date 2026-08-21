@@ -3,12 +3,15 @@
 지원 백엔드: local(로컬/공유볼륨), s3(MinIO/S3 — audio_uri가 s3://bucket/key 형태).
 """
 
+import logging
 import tempfile
 from pathlib import Path, PureWindowsPath
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
 from callwrap_api.settings import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 class UnknownAudioSource(Exception):
@@ -29,6 +32,18 @@ def fetch_audio(audio_uri: str) -> str:
     raise UnknownAudioSource(
         f"모르는 오디오 소스: {source!r}. 현재 지원: 'local', 's3'"
     )
+
+
+def cleanup_fetched_audio(audio_path: str) -> None:
+    """S3에서 받은 임시 파일만 지운다. local 원본은 절대 건드리지 않는다."""
+    if get_settings().audio_source != "s3":
+        return
+
+    try:
+        Path(audio_path).unlink(missing_ok=True)
+    except OSError as exc:
+        # 전사 결과가 이미 만들어졌다면 정리 실패 때문에 파이프라인 전체를 실패시키지 않는다.
+        logger.warning("임시 오디오 삭제 실패: %s (%s)", audio_path, exc)
 
 
 def _resolve_local(audio_uri: str) -> str:

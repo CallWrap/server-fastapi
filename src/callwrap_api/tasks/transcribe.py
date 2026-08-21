@@ -9,7 +9,11 @@
 
 import logging
 
-from callwrap_api.messaging.audio import TransientAudioError, fetch_audio
+from callwrap_api.messaging.audio import (
+    TransientAudioError,
+    cleanup_fetched_audio,
+    fetch_audio,
+)
 from callwrap_api.settings import get_settings
 from callwrap_api.stt_stub import transcribe_stub
 from callwrap_api.tasks.app import celery_app
@@ -62,7 +66,10 @@ def transcribe_task(self, call_id: str, audio_uri: str, retry_count: int = 0) ->
     from callwrap_api.tasks.quality_gate import run_quality_gate_task
 
     audio_path = fetch_audio(audio_uri)
-    transcript = _transcribe(audio_path)
+    try:
+        transcript = _transcribe(audio_path)
+    finally:
+        cleanup_fetched_audio(audio_path)
     run_quality_gate_task.delay(
         call_id, transcript.model_dump_json(), audio_uri, retry_count
     )
