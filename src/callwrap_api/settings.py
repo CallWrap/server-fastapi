@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     # FAQ 배치 생성기(routers/faq.py)가 Spring 내부 API(/api/internal/faq/*)를 호출할 때 쓴다.
     # 컨테이너 안에서 localhost는 컨테이너 자신을 가리키므로 host.docker.internal이 기본값.
     spring_api_base_url: str = "http://host.docker.internal:8080"
+    #: Spring의 /api/internal/faq/** 를 부를 때 X-API-Key로 보낼 값.
+    #: SecurityConfig의 ApiKeyAuthFilter.SCOPE_INTERNAL과 짝을 맞춘 값이어야 한다.
+    spring_internal_api_key: str = ""
     #: 소분류 하나에 이 건수 이상 후보가 모여야 FAQ 생성을 시도한다. 너무 적으면 대표성이 없다.
     faq_min_group_size: int = 3
 

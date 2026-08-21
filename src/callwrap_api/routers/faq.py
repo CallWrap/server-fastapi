@@ -27,8 +27,9 @@ def generate_batch() -> dict:
     """needs_faq=true 후보를 소분류별로 모아 EXAONE으로 FAQ 문항을 합성하고 Spring에 DRAFT로 저장한다."""
     settings = get_settings()
     base = settings.spring_api_base_url.rstrip("/")
+    headers = {"X-API-Key": settings.spring_internal_api_key}
 
-    with httpx.Client(timeout=30) as client:
+    with httpx.Client(timeout=30, headers=headers) as client:
         try:
             resp = client.get(f"{base}/api/internal/faq/candidates")
             resp.raise_for_status()
