@@ -54,6 +54,14 @@ services:
       # 요약/후속처리/FAQ(EXAONE) 호출용. 컨테이너 안에서 127.0.0.1은 컨테이너 자신을
       # 가리키므로, 호스트(또는 다른 곳)에서 도는 Ollama에 닿으려면 host.docker.internal이 필요하다.
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      # ⚠️ HF_HUB_OFFLINE로 막으면 안 된다 — sr_type.py의 SRClassifier는 저장된 가중치만으로
+      # 뜨는 게 아니라, klue/roberta-base 백본을 허브에서 먼저 받아 뼈대를 만든 다음 그 위에
+      # 로컬 체크포인트(model.pt)의 파인튜닝된 가중치를 load_state_dict로 덮어쓰는 구조다.
+      # (그래서 처음 뜰 때 "newly initialized" 경고와 함께 klue/roberta-base 443MB를 실제로
+      # 받는 로그가 찍힌다 — 멈춘 게 아니라 그 다운로드가 도는 것.) 오프라인으로 막으면 이 백본
+      # 자체를 못 받아서 아예 못 뜬다. 대신 HF_HOME을 볼륨으로 고정해서 이 다운로드가
+      # 컨테이너 재기동마다 매번 새로 일어나지 않고 최초 1회만 일어나게 한다.
+      HF_HOME: /app/.hf-cache
       # F2(중분류·소분류) 분류 모델 체크포인트 경로. classify.py의 기본값(DEFAULT_MODEL_DIR)은
       # callwrap-ai가 git 의존성으로 설치된 venv 내부 경로라 컨테이너 안에 실제로 존재하지 않는다
       # (docker compose exec worker uv run python3 -c "from callwrap_ai import classify;
@@ -65,6 +73,7 @@ services:
       CALLWRAP_MODEL_DIR: /app/models
     volumes:
       - ${CALLWRAP_MODEL_DIR_HOST:-./.model-cache}:/app/models
+      - hf_cache:/app/.hf-cache
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -86,6 +95,7 @@ services:
 
 volumes:
   audio_data:
+  hf_cache:
 
 secrets:
   # AI-model(비공개 레포)을 git으로 받아오기 위한 GitHub PAT.
