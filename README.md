@@ -38,6 +38,37 @@ uv run python -m callwrap_api.messaging.consumer                            # �
 > AI-model에 변경이 머지되면 `uv lock --upgrade-package callwrap-ai`로 다시 잠가야 반영된다.
 > (`stubs/callwrap-ai`는 전환 이전에 쓰던 예시 패키지로, 지금은 아무도 참조하지 않는다.)
 
+### Docker 없이 네이티브로 실행 (오프라인/사보원 환경)
+
+`docker compose build`는 `callwrap-ai`(비공개 `AI-model` 레포)를 git으로 클론하기 때문에
+GitHub PAT(`.github_token`)이 필요하다. `AI-model`을 이미 형제 디렉토리로 갖고 있다면,
+`pyproject.toml`의 `[tool.uv.sources]`를 `{ path = "../AI-model", editable = true }`로
+바꿔서 로컬 경로로 물리면 PAT 없이도 `uv sync`가 된다.
+
+```bash
+uv sync --group stt        # faster-whisper·pyannote·torch까지 (기본 sync엔 안 들어감)
+```
+
+venv에 pip이 없다고 나오면(`uv`가 만든 venv는 기본적으로 pip을 안 깐다) 한 번만:
+```bash
+.venv/Scripts/python.exe -m ensurepip --upgrade   # Windows
+.venv/bin/python -m ensurepip --upgrade           # Linux/macOS
+```
+
+Windows에서 Celery는 prefork를 못 쓰므로 `--pool=solo`가 필요하다:
+```bash
+export CALLWRAP_MODEL_DIR="<AI-model 레포>/data/models"   # 체크포인트 3종이 있는 경로
+export STT_BACKEND=whisper
+export WHISPER_MODEL=large-v3
+celery -A callwrap_api.tasks.app.celery_app worker --loglevel=info --pool=solo
+python -m callwrap_api.messaging.consumer
+```
+
+이 경로로 RabbitMQ(`server-spring`의 docker-compose) + Postgres/MinIO만 띄우고 Spring/FastAPI를
+전부 호스트에서 직접 실행하는 구성을 실제로 검증했다 — 오디오 1건을 `POST /api/reviews`로
+넣어 Whisper(large-v3) 전사 → pyannote 화자분리 → quality_gate → 결과가 Spring까지
+정상 왕복하는 것까지 확인됨.
+
 ## 환경변수
 
 | 변수 | 설명 |

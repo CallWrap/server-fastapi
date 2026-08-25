@@ -49,7 +49,8 @@ stt = [
 #   uv lock --upgrade-package callwrap-ai
 # (stubs/callwrap-ai는 이 전환 이전에 쓰던 예시 패키지라 지금은 아무도 참조하지 않는다.)
 [tool.uv.sources]
-callwrap-ai = { git = "https://github.com/CallWrap/AI-model.git" }
+# 임시: 오프라인 번들 검증용 로컬 경로 오버라이드 (원래는 git 소스). 작업 끝나면 되돌릴 것.
+callwrap-ai = { path = "../AI-model", editable = true }
 torch = { index = "pytorch-cu121", marker = "sys_platform == 'win32'" }
 torchaudio = { index = "pytorch-cu121", marker = "sys_platform == 'win32'" }
 

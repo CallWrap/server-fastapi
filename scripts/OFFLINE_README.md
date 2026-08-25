@@ -4,23 +4,35 @@
 
 ```
 code/server-fastapi/   파이프라인 (이 서비스)
-code/AI-model/         callwrap-ai (analyze + F2 중분류/소분류 + F3 상담등급 모델 코드)
+code/AI-model/         callwrap-ai (analyze + F2 중분류/소분류/SR유형 + F3 상담등급 모델 코드)
 wheels/                파이썬 의존성 (server-fastapi + AI-model train extra, transitive 포함)
 hf-cache/               whisper 가중치 (HuggingFace 캐시 — faster-whisper 전용)
 pyannote-cache/         pyannote 전체(파이프라인 설정+segmentation+화자임베딩) — HF 캐시 아님, 별도 경로
-models/checkpoints/     F2 checkpoint (category/subcategory) — 성진에게 수령해 여기 배치
-ollama/                 F3 감정판정용 온디바이스 LLM (exaone3.5:7.8b) — 있으면 자동 포함
+models/checkpoints/     중분류·소분류·SR유형 체크포인트 3종 — 스크립트가 AI-model/data/models/에서 자동 복사
+ollama/                 등급판정·요약·후속처리·FAQ필요 전부 담당하는 온디바이스 LLM(exaone3.5:7.8b) — 있으면 자동 포함
+vc_redist.x64.exe       Windows용 Microsoft Visual C++ 재배포 패키지 — torch/ctranslate2/numpy 등
+                        C-extension wheel이 DLL 로드에 필요. 사보원 PC에 없으면 먼저 설치한다.
 ```
 
-## 0. 지금 뭐가 실제로 동작하는지 (analyze() 현황)
+## -1. (Windows) VC++ 런타임부터 설치
+
+`torch`·`ctranslate2`·`numpy` 같은 C-extension wheel은 Visual C++ 2015-2022 x64 런타임
+DLL(`vcruntime140.dll` 등)이 있어야 로드된다. 이미 깔려있으면 건너뛰어도 되지만,
+확실치 않으면 먼저 실행해둔다 (관리자 권한 필요할 수 있음, 조용히 설치):
+```bash
+./vc_redist.x64.exe /install /quiet /norestart
+```
+
+## 0. 지금 뭐가 실제로 동작하는지 (analyze() 현황, 2026-08-22 기준)
 
 | 항목 | 상태 | 필요한 것 |
 |---|---|---|
-| F1 요약 | 더미 | (미구현) |
-| F2 중분류·소분류 | 실제 모델 | `wheels`의 torch/transformers + `models/checkpoints/`(성진 수령) |
-| F3 상담등급 | 실제 모델 | `ollama/`에 exaone3.5:7.8b |
-| 상담유형(consultation_type) | 하드코딩(ETC, confidence=0) | (미구현) |
-| STT(전사·화자분리) | 실제 모델 | `hf-cache/` + `pyannote-cache/` |
+| F1 요약·후속처리 필요·FAQ 필요 | 실제 모델 (Ollama EXAONE 1회 호출) | `ollama/`에 exaone3.5:7.8b |
+| F2 중분류(6종)·소분류(29종) | 실제 모델 | `wheels`의 torch/transformers + `models/checkpoints/` |
+| 상담유형/SR유형(8종) | 실제 모델 (화자임베딩 포함 커스텀 헤드) | `models/checkpoints/`의 `sr-type-klue-roberta-base-v2` + `hf-cache/`의 klue/roberta-base config(가중치는 불필요 — fine-tuned state_dict로 바로 덮어씀) |
+| F3 상담등급 | 실제 모델 (Ollama 감정점수 + 2축 규칙) | `ollama/`에 exaone3.5:7.8b |
+| STT(전사) | 실제 모델, 한국어 콜센터 음성으로 실측 확인함 | `hf-cache/`(large-v3) |
+| 화자분리 | 실제 모델, **wav/flac 등만 지원 — m4a/AAC는 안 됨**(pyannote가 soundfile/libsndfile로 직접 읽어서) | `pyannote-cache/` + 오디오를 wav로 사전 변환 |
 
 checkpoint나 ollama 모델이 없으면 해당 항목만 `None`으로 부분 실패 처리되고 나머지는 정상 동작한다(파이프라인 전체가 죽지 않음).
 
@@ -57,7 +69,7 @@ cp -R ../../ollama/models/* ~/.ollama/models/
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 export STT_BACKEND=whisper          # 실 전사. 파이프라인만 볼 땐 stub
-export WHISPER_MODEL=base           # hf-cache에 담아온 크기와 일치해야 함
+export WHISPER_MODEL=large-v3        # hf-cache에 담아온 크기와 일치해야 함
 export AUDIO_SOURCE=local
 export RABBITMQ_URL=amqp://guest:guest@localhost:5672//
 # F2/F3 — checkpoint·ollama를 기본 경로가 아닌 곳에 뒀다면만 필요
