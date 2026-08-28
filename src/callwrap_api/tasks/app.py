@@ -34,4 +34,11 @@ celery_app.conf.update(
     # 워커가 죽어도 태스크가 사라지지 않게. 전사는 비싼 작업이라 유실되면 손해가 크다.
     task_acks_late=True,
     worker_prefetch_multiplier=1,
+    # 하트비트를 끈다. --pool=solo에서는 전사(Whisper+pyannote)가 도는 동안 메인 프로세스가
+    # CPU에 묶여 AMQP 하트비트를 못 보낸다. 3분짜리 통화 하나가 187초 걸리는데 기본 하트비트는
+    # 60초라, 브로커가 연결을 끊고("Server unexpectedly closed connection") 그 순간
+    # acks_late 태스크는 ack을 못 한 채 큐로 되돌아간다 — 전사에 성공하고도 같은 콜을
+    # 영원히 다시 처리하는 루프가 된다.
+    # 연결이 진짜 죽는 건 TCP가 알려주므로 하트비트 없이도 감지된다.
+    broker_heartbeat=0,
 )
