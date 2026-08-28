@@ -72,7 +72,7 @@ class ResultMessage(BaseModel):
 
 
 def build_done(call_id: uuid.UUID, analysis: AnalysisResult, transcript: Transcript) -> ResultMessage:
-    """분석 성공(DONE). analysis와 전사 원본을 함께 싣는다(부분 실패는 analysis.failures로)."""
+    """분석 성공(DONE). analysis와 표시용 마스킹 전사를 싣는다(부분 실패는 analysis.failures로)."""
     return ResultMessage(
         call_id=call_id,
         status=ResultStatus.DONE,

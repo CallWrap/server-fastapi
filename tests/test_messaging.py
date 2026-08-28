@@ -39,9 +39,38 @@ def test_build_done_carries_analysis_and_transcript(fixed_analysis):
     assert msg.status is ResultStatus.DONE
     assert msg.call_id == cid
     assert msg.analysis["consultation_type"]["value"] == fixed_analysis.consultation_type.value.value
-    # 전사도 같이 실린다 — 상담사 화면의 전사 패널은 이 필드가 없으면 원문을 못 그린다.
+    assert msg.analysis["utterance_sentiments"][0] == {
+        "utterance_index": 0,
+        "speaker": "상담사",
+        "score": 0.2,
+    }
+    # 마스킹된 전사도 같이 실린다 — 화면의 전사 패널은 이 필드가 없으면 내용을 못 그린다.
     assert msg.transcript["utterances"][0]["speaker"] == "고객"
     assert msg.failures == []
+
+
+def test_analyze_task_uses_raw_for_analysis_and_publishes_sanitized_transcript(
+    monkeypatch, captured_results, fixed_analysis
+):
+    from callwrap_api.tasks import analyze as analyze_task_module
+
+    transcript = _transcript()
+    transcript.utterances[0].text = "이런 씨발 같은 시스템"
+    seen = {}
+
+    def fake_analyze(raw, summary_transcript=None):
+        seen["raw"] = raw
+        seen["summary"] = summary_transcript
+        return fixed_analysis
+
+    monkeypatch.setattr(analyze_task_module, "analyze", fake_analyze)
+
+    cid = uuid.uuid4()
+    analyze_task_module.analyze_task.apply(args=(str(cid), transcript.model_dump_json())).get()
+
+    assert seen["raw"].utterances[0].text == "이런 씨발 같은 시스템"
+    assert seen["summary"].utterances[0].text == "이런 [비속어] 같은 시스템"
+    assert captured_results[0].transcript["utterances"][0]["text"] == "이런 [비속어] 같은 시스템"
 
 
 def test_build_human_review_carries_failed_checks():

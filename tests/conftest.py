@@ -52,6 +52,8 @@ def fixed_analysis(monkeypatch):
         ConsultationType,
         Judgment,
         Summary,
+        Speaker,
+        UtteranceSentiment,
     )
     from callwrap_api.tasks import analyze as analyze_task_module
 
@@ -80,9 +82,13 @@ def fixed_analysis(monkeypatch):
         grade=Judgment(
             value=ConsultationGrade.NORMAL, confidence=0.6, evidence_indices=evidence
         ),
-        needs_followup=Judgment(value=False, confidence=0.98, evidence_indices=evidence),
+        utterance_sentiments=[
+            UtteranceSentiment(utterance_index=0, speaker=Speaker.COUNSELOR, score=0.2),
+            UtteranceSentiment(utterance_index=1, speaker=Speaker.CUSTOMER, score=-0.1),
+        ],
+        needs_followup=None,
         needs_faq=Judgment(value=True, confidence=0.94, evidence_indices=evidence),
         failures=[],
     )
-    monkeypatch.setattr(analyze_task_module, "analyze", lambda _transcript: result)
+    monkeypatch.setattr(analyze_task_module, "analyze", lambda _transcript, **_: result)
     return result

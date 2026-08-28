@@ -59,5 +59,6 @@ def test_stub_transcript_passes_real_gate_and_publishes_done(
 
     # evidence_indices가 실존 발화 index만 가리키는지 (stub 전사는 index 0~3)
     valid = {u["index"] for u in msg.transcript["utterances"]}
-    for field in ("summary", "consultation_type", "needs_followup"):
+    for field in ("summary", "consultation_type"):
         assert set(a[field]["evidence_indices"]) <= valid
+    assert a["needs_followup"] is None

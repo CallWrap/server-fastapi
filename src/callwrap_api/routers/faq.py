@@ -1,7 +1,7 @@
 """FAQ 배치 생성 트리거. 관리자가 수동으로 호출한다 (POST /internal/faq/generate-batch).
 
-Spring의 후보 조회 → 소분류별 그룹핑 → EXAONE 합성(callwrap_ai.faq_generate) → Spring에 저장,
-네 단계를 동기로 순서대로 실행한다. main.py 독스트링의 "무상태 워커라 업무 API가 없다" 원칙에
+Spring의 후보 조회 → 소분류별 그룹핑 → EXAONE 합성 → Gemma 검증 → Spring에 저장,
+다섯 단계를 동기로 순서대로 실행한다. main.py 독스트링의 "무상태 워커라 업무 API가 없다" 원칙에
 대한 유일한 예외인데, 이 작업 자체는 상태를 안 갖는다 — 후보도 결과도 전부 Spring이 저장하고,
 이 엔드포인트는 그 사이를 잇는 배치 트리거일 뿐이라 무상태성은 깨지 않는다고 판단했다.
 
@@ -15,7 +15,8 @@ from collections import defaultdict
 import httpx
 from fastapi import APIRouter, HTTPException
 
-from callwrap_ai.faq_generate import generate_faq
+from callwrap_ai.faq_generate import MAX_CASES, generate_faq
+from callwrap_ai.faq_validate import validate_faq
 from callwrap_api.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ router = APIRouter(prefix="/internal/faq", tags=["faq"])
 
 @router.post("/generate-batch")
 def generate_batch() -> dict:
-    """needs_faq=true 후보를 소분류별로 모아 EXAONE으로 FAQ 문항을 합성하고 Spring에 DRAFT로 저장한다."""
+    """EXAONE이 합성하고 Gemma가 검증한 FAQ만 Spring에 DRAFT로 저장한다."""
     settings = get_settings()
     base = settings.spring_api_base_url.rstrip("/")
     headers = {"X-API-Key": settings.spring_internal_api_key}
@@ -56,17 +57,29 @@ def generate_batch() -> dict:
                 continue
 
             groups_processed += 1
-            faq_items = generate_faq(subcategory, cases)
+            generation_cases = cases[:MAX_CASES]
+            faq_items = generate_faq(subcategory, generation_cases)
             if not faq_items:
                 logger.warning("[faq] EXAONE 생성 실패 또는 빈 결과 — 소분류=%s 건수=%d", subcategory, len(cases))
+                continue
+            faq_items = validate_faq(subcategory, generation_cases, faq_items)
+            if faq_items is None:
+                logger.warning("[faq] Gemma 검증 실패 — 소분류=%s 건수=%d", subcategory, len(cases))
+                continue
+            if not faq_items:
+                logger.info("[faq] Gemma가 초안 전체를 근거 부족으로 제외 — 소분류=%s", subcategory)
                 continue
 
             for item in faq_items:
                 raw_indices = item.get("source_indices") or []
-                sample_call_ids = [cases[i]["callId"] for i in raw_indices if 0 <= i < len(cases)]
+                sample_call_ids = [
+                    generation_cases[i]["callId"]
+                    for i in raw_indices
+                    if 0 <= i < len(generation_cases)
+                ]
                 if not sample_call_ids:
                     # 근거 인덱스가 비었거나 못 믿을 값이면, 이번 그룹 전체를 근거로 보수적으로 잡는다.
-                    sample_call_ids = [c["callId"] for c in cases]
+                    sample_call_ids = [c["callId"] for c in generation_cases]
 
                 try:
                     create_resp = client.post(

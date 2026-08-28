@@ -15,6 +15,7 @@ from callwrap_api.tasks.base import PipelineTask
 
 from callwrap_ai import analyze
 from callwrap_ai.schemas import Transcript
+from callwrap_ai.transcript_sanitizer import sanitize_transcript
 
 logger = logging.getLogger(__name__)
 
@@ -23,13 +24,14 @@ logger = logging.getLogger(__name__)
 def analyze_task(self, call_id: str, transcript_json: str) -> str:
     """품질 게이트를 통과한 전사를 분석하고 결과를 Spring에 발행한다."""
     transcript = Transcript.model_validate_json(transcript_json)
+    safe_transcript = sanitize_transcript(transcript)
 
     # analyze()는 부분 실패를 예외로 던지지 않는다 — result.failures에 담아 돌려준다.
     # 일부 모듈이 실패해도 나머지 결과는 상담사에게 보여줘야 하므로 여기서 막지 않는다.
-    result = analyze(transcript)
+    result = analyze(transcript, summary_transcript=safe_transcript)
 
-    # 결과를 Spring에 발행(DONE). 전사 원본도 함께 실어 보낸다 — 부분 실패는 result.failures에 담겨 함께 나간다.
-    publisher.publish_result(build_done(uuid.UUID(call_id), result, transcript))
+    # 결과를 Spring에 발행(DONE). 화면·DB에는 비속어를 마스킹한 전사만 보낸다.
+    publisher.publish_result(build_done(uuid.UUID(call_id), result, safe_transcript))
 
     if result.failures:
         logger.warning("콜 %s 부분 실패: %s", call_id, result.failures)
